@@ -1,0 +1,18 @@
+# Multi-stage build for generic vindexd daemon
+FROM golang:alpine AS builder
+
+WORKDIR /build
+COPY go.mod go.sum ./
+RUN go mod download
+
+COPY . .
+RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /bin/vindexd ./vindex/cmd/vindexd
+
+FROM alpine:3.21
+
+RUN apk add --no-cache ca-certificates tzdata
+COPY --from=builder /bin/vindexd /usr/local/bin/vindexd
+
+EXPOSE 8080 9090
+
+ENTRYPOINT ["/usr/local/bin/vindexd"]

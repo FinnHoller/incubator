@@ -9,6 +9,7 @@ require (
 	filippo.io/torchwood v0.10.1-0.20261024135344-1c05157b1fd2
 	github.com/cockroachdb/pebble v1.1.5
 	github.com/google/go-cmp v0.7.0
+	github.com/grafana/grafana-foundation-sdk/go v0.0.18
 	github.com/prometheus/client_golang v1.25.0
 	github.com/tetratelabs/wazero v1.12.0
 	github.com/transparency-dev/formats v0.1.2-0.20261027211732-55fe9bf0fa53
