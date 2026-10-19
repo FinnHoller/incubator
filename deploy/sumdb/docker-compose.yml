@@ -1,0 +1,87 @@
+services:
+  # Upstream Go SumDB HTTP proxy
+  sumdbproxy:
+    build:
+      context: ../..
+      dockerfile: deploy/sumdb/Dockerfile.proxy
+    container_name: vindex-sumdbproxy
+    restart: unless-stopped
+
+  # VIndex Daemon with bundled sumdb.wasm MapFn
+  vindexd:
+    build:
+      context: ../..
+      dockerfile: deploy/sumdb/Dockerfile.vindexd-sumdb
+    container_name: vindex-daemon
+    restart: unless-stopped
+    depends_on:
+      - sumdbproxy
+    volumes:
+      - vindex_data:/data
+
+  # Prometheus metrics scraper
+  prometheus:
+    image: prom/prometheus:v2.54.0
+    container_name: vindex-prometheus
+    restart: unless-stopped
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--web.console.libraries=/usr/share/prometheus/console_libraries"
+      - "--web.console.templates=/usr/share/prometheus/consoles"
+
+  # Grafana dashboard visualization
+  grafana:
+    image: grafana/grafana:11.1.0
+    container_name: vindex-grafana
+    restart: unless-stopped
+    depends_on:
+      - prometheus
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Admin
+      - GF_AUTH_DISABLE_LOGIN_FORM=true
+      - GF_SERVER_SERVE_FROM_SUB_PATH=true
+      - GF_SERVER_ROOT_URL=%(protocol)s://%(domain)s:%(http_port)s/grafana/
+    volumes:
+      - ./grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
+      - ./grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana_data:/var/lib/grafana
+
+  # Caddy Unified Gateway & Reverse Proxy
+  caddy:
+    image: caddy:2.8-alpine
+    container_name: vindex-caddy
+    restart: unless-stopped
+    depends_on:
+      - vindexd
+      - sumdbproxy
+      - grafana
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+networks:
+  default:
+    name: sumdb_default
+    ipam:
+      driver: default
+      config:
+        - subnet: 172.28.0.0/16
+
+volumes:
+  vindex_data:
+  prometheus_data:
+  grafana_data:
+  caddy_data:
+  caddy_config:

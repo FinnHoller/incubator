@@ -1,0 +1,42 @@
+# Stage 1: Build sumdb.wasm and vindexd
+FROM golang:alpine AS builder
+
+WORKDIR /build
+COPY go.mod go.sum ./
+RUN go mod download
+
+COPY . .
+
+# Compile generic vindexd binary
+RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /bin/vindexd ./vindex/cmd/vindexd
+
+# Compile sumdb.wasm MapFn
+RUN GOOS=wasip1 GOARCH=wasm CGO_ENABLED=0 go build -trimpath -ldflags="-buildid=" -buildmode=c-shared -o /bin/sumdb.wasm ./vindex/mapfn/examples/sumdb
+
+# Stage 2: Runtime image
+FROM alpine:3.21
+
+RUN apk add --no-cache ca-certificates tzdata
+COPY --from=builder /bin/vindexd /usr/local/bin/vindexd
+COPY --from=builder /bin/sumdb.wasm /etc/vindex/mapfn.wasm
+
+RUN mkdir -p /data/db /data/mpt /data/outputlog /data/tiles /etc/vindex
+
+EXPOSE 8080 9090
+
+ENTRYPOINT ["/usr/local/bin/vindexd"]
+CMD [ \
+  "--wasm_path=/etc/vindex/mapfn.wasm", \
+  "--input_log_url=http://sumdbproxy:8089", \
+  "--input_log_origin=go.sum database tree", \
+  "--input_log_pubkey=sum.golang.org+033de0ae+Ac4zctda0e5eza+HJyk9SxEdh+s3Ux18htTTAD8OuAn8", \
+  "--output_log_origin=sumdb.vindex.local", \
+  "--output_log_signer_key=PRIVATE+KEY+sumdb.vindex.local+9a36b0c7+ARiBJ2/3cKubDDLD8syZV4N9Du4kXvy/nWRCEzUYYvw6", \
+  "--db_path=/data/db", \
+  "--mpt_dir=/data/mpt", \
+  "--output_log_dir=/data/outputlog", \
+  "--tile_cache_dir=/data/tiles", \
+  "--listen_addr=:8080", \
+  "--metrics_addr=:9090", \
+  "--enable_ui=true" \
+]
