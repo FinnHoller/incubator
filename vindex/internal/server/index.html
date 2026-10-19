@@ -1,0 +1,621 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VIndex Web | Verifiable Index Viewer</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .mono { font-family: 'Fira Code', monospace; }
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #334155; border-radius: 10px; }
+    </style>
+</head>
+<body class="bg-slate-950 text-slate-200 h-screen flex flex-col overflow-hidden">
+
+    <!-- Header -->
+    <header class="h-16 border-b border-slate-800 flex items-center justify-between px-4 md:px-6 bg-slate-900/50 backdrop-blur-md z-30">
+        <div class="flex items-center gap-3">
+            <div class="w-9 h-9 bg-blue-600 rounded-xl flex items-center justify-center shadow-lg shadow-blue-900/20">
+                <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                </svg>
+            </div>
+            <div class="leading-tight">
+                <h1 class="text-base font-black tracking-tight text-white uppercase">VIndex Web</h1>
+                <p class="text-[10px] text-blue-400 font-bold tracking-widest uppercase">Verifiable Index Viewer</p>
+            </div>
+        </div>
+        <div class="flex items-center gap-3">
+            <div id="connection-status" class="flex items-center gap-2 text-xs font-medium px-3 py-1 rounded-full bg-slate-800 border border-slate-700">
+                <span id="status-indicator" class="w-2 h-2 rounded-full bg-slate-500"></span>
+                <span id="status-text" class="text-slate-400 text-[10px] uppercase tracking-wider">Ready</span>
+            </div>
+        </div>
+    </header>
+
+    <main class="flex-1 flex overflow-hidden">
+        <!-- Sidebar for Config & Metadata -->
+        <aside class="w-80 border-r border-slate-800 bg-slate-900/40 p-5 flex flex-col gap-6 custom-scrollbar overflow-y-auto">
+            <div>
+                <label class="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-2">Configuration</label>
+                <div class="space-y-3">
+                    <div>
+                        <label class="text-[10px] text-slate-400 block mb-1">VIndex API Base Path</label>
+                        <input id="config-vindex-url" type="text" value="/" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-xs mono outline-none focus:border-blue-500 text-slate-300">
+                    </div>
+                    <div>
+                        <label class="text-[10px] text-slate-400 block mb-1">Input Log Base URL</label>
+                        <input id="config-inlog-url" type="text" value="/inputlog" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-xs mono outline-none focus:border-blue-500 text-slate-300">
+                    </div>
+                    <div>
+                        <label class="text-[10px] text-slate-400 block mb-1">Results Limit Per Page</label>
+                        <input id="config-limit" type="number" value="50" min="1" max="1000" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-xs mono outline-none focus:border-blue-500 text-slate-300">
+                    </div>
+                    <div class="flex items-center gap-2 pt-1">
+                        <input id="config-prefix-mode" type="checkbox" class="rounded border-slate-800 bg-slate-950 text-blue-600 focus:ring-0">
+                        <label for="config-prefix-mode" class="text-[11px] text-slate-400 cursor-pointer">Prefix Search (?prefix=&lt;key&gt;)</label>
+                    </div>
+                    <div class="flex items-center gap-2 pt-1">
+                        <input id="config-use-woodpecker" type="checkbox" checked class="rounded border-slate-800 bg-slate-950 text-blue-600 focus:ring-0">
+                        <label for="config-use-woodpecker" class="text-[11px] text-slate-400 cursor-pointer">Link to Woodpecker</label>
+                    </div>
+                </div>
+            </div>
+
+            <div id="metadata-section" class="hidden space-y-4">
+                <label class="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-2">Query Metadata</label>
+                
+                <div class="bg-black/40 rounded-xl border border-slate-800 p-4 space-y-3">
+                    <div>
+                        <span class="text-[9px] text-slate-500 block uppercase tracking-wider font-semibold">Key Hash (SHA-256)</span>
+                        <span id="meta-key-hash" class="mono text-[11px] text-blue-400 break-all">--</span>
+                    </div>
+                    <div>
+                        <span class="text-[9px] text-slate-500 block uppercase tracking-wider font-semibold">MPT Root</span>
+                        <span id="meta-mpt-root" class="mono text-[11px] text-emerald-400 break-all">--</span>
+                    </div>
+                    <div class="grid grid-cols-2 gap-2 pt-1">
+                        <div>
+                            <span class="text-[9px] text-slate-500 block uppercase tracking-wider font-semibold">Input Log Size</span>
+                            <span id="meta-inlog-size" class="font-bold text-sm text-white mono">--</span>
+                        </div>
+                        <div>
+                            <span class="text-[9px] text-slate-500 block uppercase tracking-wider font-semibold">Output Log Size</span>
+                            <span id="meta-outlog-size" class="font-bold text-sm text-white mono">--</span>
+                        </div>
+                    </div>
+                    <div>
+                        <span class="text-[9px] text-slate-500 block uppercase tracking-wider font-semibold">Proof Type</span>
+                        <span id="meta-proof-type" class="inline-block mt-0.5 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider">--</span>
+                    </div>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Content Area -->
+        <section class="flex-1 flex flex-col bg-slate-950 min-w-0">
+            <!-- Search Bar -->
+            <div class="p-5 border-b border-slate-800 bg-slate-900/20 flex gap-3">
+                <div class="relative flex-1">
+                    <input id="search-input" type="text" value="github.com/transparency-dev/tessera" placeholder="Enter canonical search key (e.g. github.com/transparency-dev/tessera)..." 
+                           class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-sm focus:ring-1 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all placeholder:text-slate-500 mono"
+                           onkeydown="if(event.key==='Enter') app.lookup(false)">
+                </div>
+                <button onclick="app.lookup(false)" class="px-6 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-sm font-bold shadow-lg shadow-blue-900/20 transition-all flex items-center gap-2">
+                    <span>Lookup</span>
+                </button>
+            </div>
+
+            <!-- Results Container -->
+            <div class="flex-1 overflow-y-auto custom-scrollbar p-6">
+                <div id="results-container" class="max-w-4xl mx-auto space-y-4">
+                    <div class="flex flex-col items-center justify-center h-64 text-slate-500">
+                        <svg class="w-10 h-10 mb-3 text-slate-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                        </svg>
+                        <span class="text-sm font-medium">Enter a key or module name above to search the verifiable index.</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- Leaf Detail Modal -->
+    <div id="detail-overlay" class="hidden fixed inset-0 bg-slate-950/90 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div class="bg-slate-900 border border-slate-800 w-full max-w-3xl rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[85vh]">
+            <div class="p-5 border-b border-slate-800 flex justify-between items-center bg-slate-900/50">
+                <div class="flex items-center gap-2">
+                    <h3 class="text-base font-bold text-white">Input Log Leaf Inspector</h3>
+                    <span id="detail-index" class="mono text-xs px-2 py-0.5 bg-blue-950 text-blue-400 rounded-md border border-blue-800 font-bold">#--</span>
+                </div>
+                <button onclick="app.closeDetail()" class="p-1.5 hover:bg-slate-800 rounded-lg text-slate-400 hover:text-white transition-all">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                </button>
+            </div>
+            <div class="p-6 space-y-4 overflow-y-auto custom-scrollbar">
+                <div>
+                    <span class="text-[10px] text-slate-500 uppercase font-bold block mb-1 tracking-widest">Leaf Content</span>
+                    <pre id="detail-content" class="p-4 bg-slate-950 rounded-xl text-xs mono text-slate-300 border border-slate-800 leading-relaxed overflow-x-auto whitespace-pre-wrap">--</pre>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // LVP (Length-Value Prefix) Entry Bundle Parser
+        function parseLVP(data) {
+            const entries = [];
+            let offset = 0;
+            while (offset < data.length) {
+                if (offset + 2 > data.length) break;
+                const len = (data[offset] << 8) | data[offset + 1];
+                offset += 2;
+                if (offset + len > data.length) break;
+                entries.push(data.subarray(offset, offset + len));
+                offset += len;
+            }
+            return entries;
+        }
+
+        // Format tile index into /x/y/z path according to C2SP tlog-tiles spec
+        function formatTileIndex(n) {
+            const s = n.toString();
+            const chunks = [];
+            for (let i = s.length; i > 0; i -= 3) {
+                let chunk = s.substring(Math.max(0, i - 3), i);
+                while (chunk.length < 3) chunk = '0' + chunk;
+                chunks.unshift(chunk);
+            }
+            for (let i = 0; i < chunks.length - 1; i++) {
+                chunks[i] = 'x' + chunks[i];
+            }
+            return chunks.join('/');
+        }
+
+        // Compute SHA-256 hex string from string or raw bytes
+        async function sha256Hex(message) {
+            const msgBuffer = new TextEncoder().encode(message);
+            const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
+            const hashArray = Array.from(new Uint8Array(hashBuffer));
+            return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+        }
+
+        const app = {
+            config: {
+                tileSize: 256
+            },
+            state: {
+                currentKey: '',
+                keyHash: '',
+                inputLogTreeSize: 0,
+                outputLogTreeSize: 0,
+                mptRoot: '',
+                discoveredKeys: [],
+                indices: [],
+                nextBefore: null,
+                tileCache: {}
+            },
+
+            setStatus(status, type = 'ready') {
+                const text = document.getElementById('status-text');
+                const dot = document.getElementById('status-indicator');
+                text.textContent = status;
+                
+                dot.className = "w-2 h-2 rounded-full ";
+                if (type === 'loading') {
+                    dot.className += "bg-amber-400 animate-ping";
+                    text.className = "text-amber-400 text-[10px] uppercase tracking-wider";
+                } else if (type === 'error') {
+                    dot.className += "bg-rose-500";
+                    text.className = "text-rose-400 text-[10px] uppercase tracking-wider";
+                } else if (type === 'success') {
+                    dot.className += "bg-emerald-400";
+                    text.className = "text-emerald-400 text-[10px] uppercase tracking-wider";
+                } else {
+                    dot.className += "bg-slate-500";
+                    text.className = "text-slate-400 text-[10px] uppercase tracking-wider";
+                }
+            },
+
+            async lookup(isPagination = false) {
+                const inputEl = document.getElementById('search-input');
+                let rawKey = inputEl.value.trim();
+                if (!rawKey && !isPagination) return;
+
+                const vindexBasePath = document.getElementById('config-vindex-url').value.trim().replace(/\/+$/, '');
+                const limit = document.getElementById('config-limit').value || 50;
+                const isPrefix = document.getElementById('config-prefix-mode').checked;
+
+                try {
+                    if (!isPagination) {
+                        this.state.currentKey = rawKey;
+                        this.state.indices = [];
+                        this.state.nextBefore = null;
+                        this.state.discoveredKeys = [];
+                        this.state.keyHash = await sha256Hex(rawKey);
+
+                        this.setStatus('Querying MPT /keys...', 'loading');
+                        document.getElementById('results-container').innerHTML = `
+                            <div class="flex flex-col items-center justify-center h-64 text-slate-500 animate-pulse">
+                                <div class="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mb-3"></div>
+                                <span>Fetching MPT proof and keys...</span>
+                            </div>
+                        `;
+
+                        const keysUrl = isPrefix
+                            ? `${vindexBasePath}/keys?prefix=${encodeURIComponent(rawKey)}`
+                            : `${vindexBasePath}/keys?key=${encodeURIComponent(rawKey)}`;
+                        const keysResp = await fetch(keysUrl);
+                        if (!keysResp.ok) {
+                            const errText = await keysResp.text();
+                            throw new Error(`HTTP ${keysResp.status}: ${errText}`);
+                        }
+                        const keysBody = await keysResp.text();
+                        const hasKeys = this.processKeysResponse(keysBody, isPrefix);
+                        if (!hasKeys) {
+                            this.setStatus('Verified', 'success');
+                            return;
+                        }
+                        // Default to loading entries for the first matched key
+                        this.state.currentKey = this.state.discoveredKeys[0].key;
+                        this.state.keyHash = await sha256Hex(this.state.currentKey);
+                    }
+
+                    const before = isPagination ? (this.state.nextBefore || this.state.inputLogTreeSize) : this.state.inputLogTreeSize;
+                    if (!before) {
+                        this.renderResults();
+                        this.setStatus('Verified', 'success');
+                        return;
+                    }
+
+                    this.setStatus('Querying Pebble /values...', 'loading');
+                    const entriesUrl = `${vindexBasePath}/values?key=${encodeURIComponent(this.state.currentKey)}&before=${before}`;
+                    const entriesResp = await fetch(entriesUrl);
+                    if (entriesResp.status === 404) {
+                        this.processEntriesResponse('', isPagination);
+                        this.setStatus('Verified', 'success');
+                        return;
+                    }
+                    if (!entriesResp.ok) {
+                        const errText = await entriesResp.text();
+                        throw new Error(`HTTP ${entriesResp.status}: ${errText}`);
+                    }
+                    const entriesBody = await entriesResp.text();
+                    this.processEntriesResponse(entriesBody, isPagination);
+                    this.setStatus('Verified', 'success');
+                } catch (e) {
+                    console.error(e);
+                    this.setStatus('Error', 'error');
+                    this.renderError(e.message);
+                }
+            },
+
+            processKeysResponse(keysBody, isPrefix = false) {
+                const discovered = [];
+
+                const proofSplit = keysBody.split('\n\nc2sp.org/tlog-proof@v1\n');
+                if (proofSplit.length >= 1) {
+                    const keyLines = proofSplit[0].split('\n');
+                    for (let i = 1; i < keyLines.length; i++) {
+                        const trimmed = keyLines[i].trim();
+                        if (!trimmed) continue;
+                        if (i === 1 && (trimmed === 'proof' || trimmed.startsWith('proof '))) {
+                            continue;
+                        }
+                        const parts = trimmed.split(/\s+/);
+                        if (parts.length >= 2) {
+                            discovered.push({ key: parts[0], valueRoot: parts[1] });
+                        }
+                    }
+                }
+
+                if (proofSplit.length >= 2) {
+                    const bindStanzas = proofSplit[1].split('\n\n');
+                    const proofLines = (bindStanzas[0] || '').split('\n');
+                    for (const l of proofLines) {
+                        const trimmed = l.trim();
+                        if (trimmed.startsWith('extra ')) {
+                            try {
+                                const rawLeaf = atob(trimmed.slice(6).trim());
+                                for (const ll of rawLeaf.split('\n')) {
+                                    if (ll.startsWith('mpt-root ')) {
+                                        this.state.mptRoot = ll.slice(9).trim();
+                                    } else if (ll.startsWith('input-size ')) {
+                                        this.state.inputLogTreeSize = parseInt(ll.slice(11).trim(), 10) || 0;
+                                    }
+                                }
+                            } catch (err) {
+                                console.error('Failed to decode extra leaf:', err);
+                            }
+                        }
+                    }
+                    if (bindStanzas.length >= 2) {
+                        const outLines = bindStanzas[1].split('\n');
+                        if (outLines.length >= 2) {
+                            this.state.outputLogTreeSize = parseInt(outLines[1].trim(), 10) || 0;
+                        }
+                    }
+                }
+
+                this.state.discoveredKeys = discovered;
+
+                document.getElementById('metadata-section').classList.remove('hidden');
+                document.getElementById('meta-key-hash').textContent = this.state.keyHash;
+                document.getElementById('meta-mpt-root').textContent = this.state.mptRoot || '--';
+                document.getElementById('meta-inlog-size').textContent = this.state.inputLogTreeSize.toLocaleString();
+                document.getElementById('meta-outlog-size').textContent = this.state.outputLogTreeSize.toLocaleString();
+
+                const proofTypeEl = document.getElementById('meta-proof-type');
+                if (discovered.length === 0) {
+                    proofTypeEl.textContent = isPrefix ? "Prefix Empty (0 Keys)" : "Non-Inclusion (Empty)";
+                    proofTypeEl.className = "inline-block mt-0.5 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-rose-950 text-rose-400 border border-rose-800";
+                    this.renderNonInclusion();
+                    return false;
+                }
+
+                proofTypeEl.textContent = isPrefix ? `Prefix Proof (${discovered.length} Keys)` : "Inclusion Proof Valid";
+                proofTypeEl.className = "inline-block mt-0.5 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-emerald-950 text-emerald-400 border border-emerald-800";
+                return true;
+            },
+
+            processEntriesResponse(entriesBody, isPagination) {
+                const pageIndices = [];
+                let nextBefore = null;
+                let coveredSize = 0;
+
+                if (entriesBody && entriesBody.trim() !== '') {
+                    const stanzas = entriesBody.trim().split('\n\n');
+                    for (const l of (stanzas[0] || '').split('\n')) {
+                        const trimmed = l.trim();
+                        if (trimmed.startsWith('preceding ')) {
+                            coveredSize = parseInt(trimmed.slice(10).trim(), 10) || 0;
+                        }
+                    }
+                    if (stanzas.length >= 2 && stanzas[1]) {
+                        for (const l of stanzas[1].split('\n')) {
+                            const trimmed = l.trim();
+                            if (trimmed !== '') {
+                                const val = parseInt(trimmed, 10);
+                                if (!isNaN(val)) pageIndices.push(val);
+                            }
+                        }
+                    }
+                    if (coveredSize > 0 && pageIndices.length > 0) {
+                        nextBefore = pageIndices[0];
+                    }
+                    pageIndices.reverse();
+                }
+
+                this.state.nextBefore = nextBefore;
+                if (isPagination) {
+                    this.state.indices = this.state.indices.concat(pageIndices);
+                } else {
+                    this.state.indices = pageIndices;
+                }
+
+                this.renderResults();
+            },
+
+            async selectKey(idx) {
+                const entry = this.state.discoveredKeys[idx];
+                if (!entry) return;
+                this.state.currentKey = entry.key;
+                this.state.keyHash = await sha256Hex(entry.key);
+                this.state.indices = [];
+                this.state.nextBefore = null;
+                await this.lookup(true);
+            },
+
+            renderResults() {
+                const container = document.getElementById('results-container');
+                container.innerHTML = '';
+
+                if (this.state.discoveredKeys.length > 1) {
+                    const keyBar = document.createElement('div');
+                    keyBar.className = "flex flex-wrap items-center gap-1.5 pb-3 mb-2 border-b border-slate-800";
+                    this.state.discoveredKeys.forEach((dk, i) => {
+                        const btn = document.createElement('button');
+                        const active = dk.key === this.state.currentKey;
+                        btn.className = active
+                            ? "px-2.5 py-1 rounded-lg text-xs font-mono bg-blue-600 text-white border border-blue-500"
+                            : "px-2.5 py-1 rounded-lg text-xs font-mono bg-slate-900 text-slate-300 border border-slate-700 hover:border-slate-500";
+                        btn.textContent = dk.key;
+                        btn.onclick = () => app.selectKey(i);
+                        keyBar.appendChild(btn);
+                    });
+                    container.appendChild(keyBar);
+                }
+
+                if (this.state.indices.length === 0) {
+                    this.renderNonInclusion();
+                    return;
+                }
+
+                const header = document.createElement('div');
+                header.className = "flex items-center justify-between pb-2 border-b border-slate-800";
+                header.innerHTML = `
+                    <div class="flex items-center gap-2">
+                        <span class="text-sm font-bold text-white">Found ${this.state.indices.length} Matching ${this.state.indices.length === 1 ? 'Entry' : 'Entries'}</span>
+                        <span class="text-xs text-slate-500">(${this.state.currentKey})</span>
+                    </div>
+                    <button id="btn-fetch-all" onclick="app.fetchAll()" class="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-semibold shadow transition-all">
+                        Fetch All Leaves
+                    </button>
+                `;
+                container.appendChild(header);
+
+                const list = document.createElement('div');
+                list.className = "space-y-2.5 pt-2";
+
+                const inLogUrl = document.getElementById('config-inlog-url').value.trim().replace(/\/+$/, '');
+                const useWoodpecker = document.getElementById('config-use-woodpecker').checked;
+
+                this.state.indices.forEach(idx => {
+                    const card = document.createElement('div');
+                    card.className = "flex items-center justify-between p-3.5 bg-slate-900/60 border border-slate-800 rounded-xl hover:border-slate-700 transition-all";
+                    
+                    let actions = '';
+                    if (useWoodpecker) {
+                        actions += `
+                            <a href="${inLogUrl}/index.html#entry-${idx}" target="_blank" class="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs font-medium border border-slate-700 transition-all flex items-center gap-1">
+                                <span>Woodpecker</span>
+                                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
+                            </a>
+                        `;
+                    }
+                    actions += `
+                        <button onclick="app.fetchLeaf(${idx})" class="px-3 py-1.5 bg-slate-800 hover:bg-blue-600 text-slate-200 hover:text-white rounded-lg text-xs font-semibold border border-slate-700 hover:border-blue-500 transition-all">
+                            Fetch Leaf
+                        </button>
+                    `;
+
+                    card.innerHTML = `
+                        <div class="flex items-center gap-3 min-w-0 pr-4">
+                            <span class="mono text-xs text-blue-400 font-bold bg-blue-950/60 border border-blue-900/50 px-2 py-1 rounded">#${idx}</span>
+                            <span id="preview-${idx}" class="text-xs text-slate-500 truncate mono">Not fetched yet</span>
+                        </div>
+                        <div class="flex items-center gap-2 shrink-0">
+                            ${actions}
+                        </div>
+                    `;
+                    list.appendChild(card);
+                });
+
+                container.appendChild(list);
+
+                // Pagination button if next_before is present
+                if (this.state.nextBefore !== null) {
+                    const pagDiv = document.createElement('div');
+                    pagDiv.className = "pt-4 flex justify-center";
+                    pagDiv.innerHTML = `
+                        <button onclick="app.lookup(true)" class="px-5 py-2.5 bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-300 rounded-xl text-xs font-bold transition-all shadow">
+                            Load Earlier Entries (Before #${this.state.nextBefore})
+                        </button>
+                    `;
+                    container.appendChild(pagDiv);
+                }
+            },
+
+            renderNonInclusion() {
+                document.getElementById('results-container').innerHTML = `
+                    <div class="flex flex-col items-center justify-center h-64 text-slate-400 bg-slate-900/20 border border-slate-800/80 rounded-2xl p-6 text-center">
+                        <div class="w-12 h-12 bg-rose-950/40 rounded-full flex items-center justify-center border border-rose-900/40 mb-3 text-rose-400">
+                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                            </svg>
+                        </div>
+                        <span class="text-sm font-bold text-white mb-1">Cryptographically Verified Non-Inclusion</span>
+                        <p class="text-xs text-slate-500 max-w-md">No occurrences of this key exist in the verifiable index. The Merkle Patricia Trie non-inclusion proof matches the authenticated MPT Root.</p>
+                    </div>
+                `;
+            },
+
+            renderError(msg) {
+                document.getElementById('results-container').innerHTML = `
+                    <div class="flex flex-col items-center justify-center h-64 text-rose-400 bg-slate-900/20 border border-slate-800 rounded-2xl p-6 text-center">
+                        <svg class="w-10 h-10 mb-3 text-rose-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                        </svg>
+                        <span class="font-bold text-sm text-white mb-1">Query Failed</span>
+                        <span class="text-xs text-rose-400 mono">${msg}</span>
+                    </div>
+                `;
+            },
+
+            async fetchAll() {
+                const btn = document.getElementById('btn-fetch-all');
+                if (!btn) return;
+                btn.disabled = true;
+                btn.textContent = "Fetching...";
+                btn.className = "px-3 py-1.5 bg-slate-800 text-slate-500 rounded-lg text-xs font-semibold cursor-not-allowed";
+
+                for (const idx of this.state.indices) {
+                    await this.fetchLeaf(idx);
+                }
+
+                btn.textContent = "Fetched All";
+            },
+
+            async fetchLeaf(idx) {
+                const previewEl = document.getElementById(`preview-${idx}`);
+                if (!previewEl) return;
+                previewEl.textContent = "Fetching tile...";
+                previewEl.className = "text-xs text-blue-400 mono animate-pulse";
+
+                try {
+                    const inLogUrl = document.getElementById('config-inlog-url').value.trim().replace(/\/+$/, '');
+                    const tileIdx = Math.floor(idx / this.config.tileSize);
+                    const formattedTile = formatTileIndex(tileIdx);
+                    
+                    let url = `${inLogUrl}/tile/entries/${formattedTile}`;
+                    const isFullTile = (tileIdx + 1) * this.config.tileSize <= this.state.inputLogTreeSize;
+                    if (!isFullTile) {
+                        const leavesCount = this.state.inputLogTreeSize % this.config.tileSize;
+                        url = `${url}.p/${leavesCount}`;
+                    }
+
+                    let entries;
+                    if (this.state.tileCache[url]) {
+                        entries = this.state.tileCache[url];
+                    } else {
+                        const response = await fetch(url);
+                        if (!response.ok) throw new Error(`HTTP ${response.status} fetching tile`);
+                        const buffer = await response.arrayBuffer();
+                        entries = parseLVP(new Uint8Array(buffer));
+                        this.state.tileCache[url] = entries;
+                    }
+                    
+                    const localIdx = idx % this.config.tileSize;
+                    if (localIdx >= entries.length) {
+                        throw new Error(`Index #${idx} not present in partial tile`);
+                    }
+
+                    const leafBytes = entries[localIdx];
+                    const decoder = new TextDecoder('utf-8');
+                    const text = decoder.decode(leafBytes);
+
+                    previewEl.textContent = text.replace(/\n/g, ' ⏎ ').substring(0, 80) + (text.length > 80 ? '...' : '');
+                    previewEl.className = "text-xs text-slate-300 mono truncate cursor-pointer hover:text-blue-400 transition-all";
+                    previewEl.onclick = () => this.showDetail(idx, text);
+                } catch (e) {
+                    console.error(e);
+                    previewEl.textContent = `Error: ${e.message}`;
+                    previewEl.className = "text-xs text-rose-400 mono";
+                }
+            },
+
+            showDetail(idx, content) {
+                document.getElementById('detail-index').textContent = `#${idx}`;
+                document.getElementById('detail-content').textContent = content;
+                document.getElementById('detail-overlay').classList.remove('hidden');
+            },
+
+            closeDetail() {
+                document.getElementById('detail-overlay').classList.add('hidden');
+            }
+        };
+
+        window.addEventListener('DOMContentLoaded', () => {
+            let basePath = window.location.pathname;
+            if (basePath.endsWith('/index.html')) {
+                basePath = basePath.slice(0, -'/index.html'.length);
+            }
+            if (!basePath.endsWith('/')) {
+                basePath += '/';
+            }
+            const vindexInput = document.getElementById('config-vindex-url');
+            if (vindexInput) {
+                vindexInput.value = basePath.replace(/\/+$/, '') || '/';
+            }
+            const inlogInput = document.getElementById('config-inlog-url');
+            if (inlogInput) {
+                inlogInput.value = basePath + 'inputlog';
+            }
+        });
+    </script>
+</body>
+</html>
