@@ -6,6 +6,7 @@ toolchain go1.27.3
 
 require (
 	filippo.io/sunlight v0.10.2
+	filippo.io/torchwood v0.10.1-0.20261024135344-1c05157b1fd2
 	github.com/cockroachdb/pebble v1.1.5
 	github.com/google/go-cmp v0.7.0
 	github.com/prometheus/client_golang v1.25.0
@@ -21,7 +22,6 @@ require (
 
 require (
 	filippo.io/mldsa v1.0.0 // indirect
-	filippo.io/torchwood v0.10.1-0.20261024135344-1c05157b1fd2 // indirect
 	github.com/DataDog/zstd v1.4.5 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/cenkalti/backoff/v5 v5.0.3 // indirect
