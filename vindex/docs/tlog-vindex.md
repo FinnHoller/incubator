@@ -36,15 +36,15 @@ The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", "SHOULD", "S
 
 A verifiable index allows clients to look up which entries in an existing append-only transparency log (the _input log_) match a given search key or key prefix, without downloading the entire input log or trusting the index operator.
 
-The index operator applies a deterministic _mapping function_ to each entry in the input log to extract zero or more _canonical keys_. For each key, the index maintains an [RFC 6962][] Merkle tree (the key's _value log_) over the ascending sequence of input log _entry indices_ at which that key appeared. The 32-byte roots of all non-empty value logs (each a _value log root_, `value_root`) are stored in a path-compressed binary Merkle Patricia Trie (_MPT_).
+The index operator applies a deterministic _mapping function_ to each entry in the input log to extract zero or more _canonical keys_. For each key, the index maintains an [RFC 6962][] Merkle tree (the key's _value log_) over the ascending sequence of input log _entry indices_ at which that key appeared. The 32-byte roots of all non-empty value logs (each a _value log root_, `value_root`) are stored in a path-compressed binary Merkle Patricia Trie (_MPT_) under the corresponding canonical key.
 
-Rather than signing standalone map checkpoints, the index operator publishes each _index state commitment_ (`c2sp.org/tlog-vindex-state@v1`). This binds the input log origin (`input-origin`), the indexed entry range `[from, input_size)`, the input log root hash (`input-root`), and the resulting 32-byte MPT root hash (`mpt-root`) as an entry in a [tiled transparency log][tlog-tiles] (the _output log_) witnessed according to [tlog-witness][]. Lookup clients verify query responses offline against witnessed output log checkpoints, while monitors and auditors can deterministically replay the input log to verify every state commitment in the output log.
+Rather than signing standalone map checkpoints, the index operator publishes each _index state commitment_ (`c2sp.org/tlog-vindex-state@v1`) as an entry in a [tiled transparency log][tlog-tiles] (the _output log_) witnessed according to [tlog-witness][]. This binds the input log origin (`input-origin`), the indexed entry range `[from, input_size)`, the input log root hash (`input-root`), and the resulting 32-byte MPT root hash (`mpt-root`). Lookup clients verify query responses offline against witnessed output log checkpoints, while monitors and auditors can deterministically replay the input log and map construction to verify every state commitment in the output log.
 
 ## Parameters
 
 A verifiable index is defined by:
 
-- an _input log_, parameterized by its [checkpoint][] origin (`<input-log-origin>`). Auditors and clients that fetch entries from the input log additionally require the input log's checkpoint verification policy and entry retrieval mechanism (such as [tlog-tiles][] or [static-ct-api][]);
+- an _input log_, parameterized by its [checkpoint][] origin (`<input-log-origin>`), representing a Merkle tree transparency log. Auditors and clients that fetch entries from the input log additionally require the input log's checkpoint verification policy and entry retrieval mechanism (such as [tlog-tiles][] or [static-ct-api][]);
 
 - a _start index_ (`from`), the first input log entry index covered by the verifiable index (`0` when indexing from the start of the input log, or a positive integer when indexing a suffix of an existing input log);
 
@@ -365,7 +365,7 @@ To verify an exact key lookup (`GET <index-url>/keys?key=<key>`, with `target = 
 
 ### Verifying value log entries
 
-Given a canonical key `key`, an expected 32-byte value log root `value_root`, the start index `from`, and cursor `before` (initialized to `input_size` from the `keys` response):
+Given a canonical key `key`, an expected 32-byte value log root `value_root` (from the `keys` response), the start index `from` (matching the index state commitment), and cursor `before` (initialized to `input_size` from the `keys` response):
 
 1. Fetch `GET <index-url>/values?key=<key>&before=<before>`.
 
